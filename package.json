@@ -1,7 +1,6 @@
 {
   "name": "chicken-cam",
-  "version": "1.0.0",
-  "description": "",
+  "version": "0.0.1",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -9,6 +8,16 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "hls.js": "^0.9.1"
-  }
+    "hls.js": "^0.9.1",
+    "serialport": "^6.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strangesast/chicken-cam.git"
+  },
+  "bugs": {
+    "url": "https://github.com/strangesast/chicken-cam/issues"
+  },
+  "homepage": "https://github.com/strangesast/chicken-cam#readme",
+  "description": ""
 }

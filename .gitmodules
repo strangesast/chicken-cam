@@ -1,0 +1,9 @@
+[submodule "Arduino-Makefile"]
+	path = Arduino-Makefile
+	url = git@github.com:sudar/Arduino-Makefile.git
+[submodule "Arduino-Temperature-Control-Library"]
+	path = DallasTemperature
+	url = git@github.com:milesburton/Arduino-Temperature-Control-Library.git
+[submodule "OneWire"]
+	path = OneWire
+	url = git@github.com:PaulStoffregen/OneWire.git

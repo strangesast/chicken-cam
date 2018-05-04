@@ -8,10 +8,11 @@
   <video id="video"></video>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
+    const src = `http://${ location.host.slice(0, -location.port.length) + '8080' }/hls/stream.m3u8`;
     if(Hls.isSupported()) {
         var video = document.getElementById('video');
         var hls = new Hls();
-        hls.loadSource('http://localhost:8080/hls/stream.m3u8');
+	hls.loadSource(src);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED,function() {
           video.play();
@@ -21,7 +22,7 @@
     // When the browser has built-in HLS support (check using `canPlayType`), we can provide an HLS manifest (i.e. .m3u8 URL) directly to the video element throught the `src` property.
     // This is using the built-in support of the plain video element, without using hls.js.
     else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = 'http://localhost:8080/hls/stream.m3u8';
+      video.src = src;
       video.addEventListener('canplay',function() {
         video.play();
       });
