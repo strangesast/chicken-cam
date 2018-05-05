@@ -1,8 +1,9 @@
 const SerialPort = require('serialport');
+const path = require('path');
 const port = new SerialPort('/dev/ttyACM0', { baudRate: 9600 });
 const { Database } = require('sqlite3');
 
-const db = new Database('./database');
+const db = new Database(path.join(__dirname, 'database'));
 // `create table if not exists temps ();`
 db.run(`create table if not exists temps (temp Integer, date Integer);`);
 
