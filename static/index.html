@@ -8,7 +8,8 @@
   <video id="video"></video>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
-    const src = `http://${ location.host.slice(0, -location.port.length) + '8080' }/hls/stream.m3u8`;
+    //const src = `http://${ location.host }/hls/stream.m3u8`;
+    const src = `/hls/stream.m3u8`;
     if(Hls.isSupported()) {
         var video = document.getElementById('video');
         var hls = new Hls();
@@ -27,6 +28,13 @@
         video.play();
       });
     }
+
+    const socket = new WebSocket(`ws://${ location.host }/api/sockets`);
+
+    socket.onopen = () => console.log('socket opened');
+    socket.onerror = e => console.log(`socket error: ${e.error}`);
+    socket.onmessage = e => console.log(`socket message: ${e.data}`);
+    socket.onclose = () => console.log('socket closed');
   </script>
 </body>
 </html>

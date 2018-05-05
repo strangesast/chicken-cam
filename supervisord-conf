@@ -1,6 +1,0 @@
-[program:node]
-command=node /app/server.js
-directory=/app
-autostart=true
-autorestart=true
-startretries=3
