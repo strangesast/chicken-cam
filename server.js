@@ -12,6 +12,12 @@ const db = new Database(path.join(__dirname, 'database'));
 // `create table if not exists temps ();`
 db.run(`create table if not exists temps (temp Integer, date Integer);`);
 
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/', (_, res) => {
+    res.sendFile(path.join(__dirname, 'static', 'index.html'));
+  });
+}
+
 app.get('/api', (req, res, next) => {
   if (req.accepts('text/html')) {
     db.all(`select * from temps order by date desc`, (err, rows) => {
@@ -61,11 +67,13 @@ port.on('open', function() {
     if (add.length > 0) {
       db.run(`insert into temps values ${add.map(temp => `(${temp},${date})`).join(',')};`);
 
-      wss.clients
-        .forEach(client => client.readyState === WebSocket.OPEN ?
-          client.send(JSON.stringify({ temp, date })) :
-          null
-        );
+      for (const temp of add) {
+        wss.clients
+          .forEach(client => client.readyState === WebSocket.OPEN ?
+            client.send(JSON.stringify({ temp, date })) :
+            null
+          );
+      }
     }
   });
 });
