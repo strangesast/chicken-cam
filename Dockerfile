@@ -21,7 +21,7 @@ RUN make
 RUN make install
 
 COPY static /usr/share/nginx/html
-COPY conf /etc/nginx/nginx.conf
+COPY nginx-conf /etc/nginx/nginx.conf
 
 EXPOSE 8080
 EXPOSE 3000
