@@ -1,5 +1,6 @@
+FROM alpine
 #FROM node:9-alpine
-FROM resin/raspberry-pi-alpine
+#FROM resin/raspberry-pi-alpine
 
 ENV PATH="/usr/bin:$PATH"
 
@@ -19,13 +20,16 @@ RUN mv /tmp/nginx-1.14.0 /opt/
 
 WORKDIR /tmp
 ADD https://nodejs.org/dist/v10.0.0/node-v10.0.0-linux-armv7l.tar.xz .
-RUN tar xpvf node-v10.0.0-linux-armv7l.tar.xz -C /opt/node
+RUN tar xpvf node-v10.0.0-linux-armv7l.tar.xz -C /opt
+ENV PATH="/opt/node-v10.0.0-linux-armv7l/bin:$PATH"
 
 WORKDIR /opt/nginx-1.14.0
 
 RUN ./configure --with-http_ssl_module --add-module=../nginx-rtmp-module
 RUN make
 RUN make install
+
+WORKDIR /opt/node-v10.0.0-linux-armv7l
 
 COPY static /usr/share/nginx/html
 COPY nginx-conf /etc/nginx/nginx.conf
