@@ -1,4 +1,5 @@
-FROM node:9-alpine
+#FROM node:9-alpine
+FROM resin/raspberry-pi-alpine
 
 ENV PATH="/usr/bin:$PATH"
 
@@ -15,6 +16,11 @@ RUN cd pcre-8.41 && ./configure && make && make install
 ADD http://nginx.org/download/nginx-1.14.0.tar.gz .
 RUN tar xf nginx-1.14.0.tar.gz
 RUN mv /tmp/nginx-1.14.0 /opt/
+
+WORKDIR /tmp
+ADD https://nodejs.org/dist/v10.0.0/node-v10.0.0-linux-armv7l.tar.xz .
+RUN tar xpvf node-v10.0.0-linux-armv7l.tar.xz -C /opt/node
+
 WORKDIR /opt/nginx-1.14.0
 
 RUN ./configure --with-http_ssl_module --add-module=../nginx-rtmp-module
