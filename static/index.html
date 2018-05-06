@@ -5,7 +5,11 @@
     <title>Chicken Cam</title>
 </head>
 <body>
-  <video id="video"></video>
+  <div>
+    <video id="video"></video>
+  </div>
+  <svg height="300"></svg>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
     //const src = `http://${ location.host }/hls/stream.m3u8`;
@@ -35,6 +39,111 @@
     socket.onerror = e => console.log(`socket error: ${e.error}`);
     socket.onmessage = e => console.log(`socket message: ${e.data}`);
     socket.onclose = () => console.log('socket closed');
+
+    (async function() {
+      const res = await fetch('/api', {headers:{'Accept': 'application/json'}});
+      let data = await res.json();
+
+      const hours = {};
+      for (const d of data) {
+        const hour = Math.round(d.date / 3600000) * 3600000;
+        if (hours[hour] == null) {
+          hours[hour] = d.temp;
+        }
+      }
+
+      const byHour = Object.entries(hours)
+        .map(([date, temp]) => ({ temp, date: new Date(parseInt(date, 10)) }))
+        .sort(sortBy('date'));
+
+      const minutes = data
+        .reduce((minutes, d) => {
+          const minute = Math.round(d.date / 60000) * 60000;
+          (minutes[minute] || (minutes[minute] = [])).push(d.temp);
+          return minutes;
+        }, {});
+
+      const byMinute = Object.entries(minutes)
+        .map(([date, vals]) => ({
+          date: new Date(parseInt(date)),
+          temp: vals.reduce((a, b) => a + b, 0) / vals.length,
+        }))
+        .sort(sortBy('date'));
+
+      graphOnce(byHour, 3600000);
+      //graphOnce(byMinute, 60000);
+    })();
+
+    function graphOnce(data, interval) {
+      const svg = d3.select("svg");
+      const margin = {top: 20, right: 20, bottom: 30, left: 50};
+      const width = Math.max(500, data.length * 1 / 2) - margin.left - margin.right;
+      svg.attr('width', width);
+      const height = +svg.attr("height") - margin.top - margin.bottom;
+      const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+      const x = d3.scaleTime().rangeRound([0, width]).domain(d3.extent(data, d => d.date));
+      const y = d3.scaleLinear().rangeRound([height, 0]).domain(d3.extent(data, d => d.temp));
+      const line = d3.line().x(d => x(d.date)).y(d => y(d.temp));
+
+      g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x)).select('.domain').remove();
+      g.append('g').call(d3.axisLeft(y)).append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('y', 6)
+        .attr('dy', '0.71em')
+        .attr('text-anchor', 'end')
+        .text('Temperature (F)');
+
+      const parts = data
+        .reduce((parts, d) => {
+          if (parts.length === 0) {
+            const part = [d];
+            parts.push(part);
+          } else {
+            const part = parts[parts.length - 1];
+            if (part[part.length - 1].date.getTime() + interval === d.date.getTime()) {
+              part.push(d);
+            } else {
+              parts.push([d]);
+            }
+          }
+          return parts;
+        }, [])
+        .filter(p => p.length > 1);
+
+      const boundaries = parts.reduce((arr, c, i, src) => {
+        if (i + 1 < src.length) {
+          const [a, b] = [c, src[i + 1]];
+          return [...arr, [a[a.length - 1].date, b[0].date].map(v => x(v))];
+        }
+        return arr;
+      }, []);
+
+      for (const [a, b] of boundaries) {
+        const w = b - a;
+
+        g.append('g')
+          .attr('transform', `translate(${a},0)`)
+          .append('rect')
+          .attr('fill', 'rgb(0, 0, 0, 0.1)')
+          .attr('width', w)
+          .attr('height', height);
+      }
+
+      for (const part of parts) {
+        g.append('path').datum(part)
+          .attr('fill', 'none')
+          .attr('stroke', 'black')
+          .attr('stroke-width', 1.5)
+          .attr('d', line);
+      }
+    };
+
+    function sortBy(key) {
+      return function(a, b) {
+        return a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0;
+      };
+    }
   </script>
 </body>
 </html>
