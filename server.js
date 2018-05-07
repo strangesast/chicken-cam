@@ -19,36 +19,45 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
+//const q = `select * from temps order by date asc`;
+const q = `select avg(inside), avg(outside), date from temps group by cast(date / 60000 as int) order by date asc`;
+
+function handleRow(row) {
+  //return row;
+  return { inside: row['avg(inside)'], outside: row['avg(outside)'], date: row.date };
+}
+
 app.get('/api', (req, res, next) => {
   if (req.accepts('text/html')) {
-    db.all(`select * from temps order by date desc`, (err, rows) => {
+    db.all(q, (err, rows) => {
       if (err != null) {
         next(err);
         return;
       }
-      res.send(`<pre>${JSON.stringify(rows, null, 2)}</pre>`);
+      res.send(`<pre>${JSON.stringify(rows.map(handleRow), null, 2)}</pre>`);
     });
   } else if (req.accepts('application/stream+json')) {
     db.each(
-      `select * from temps order by date desc`,
+      q,
       (err, row) => {
         if (err) {
           next(err);
           return;
         }
-        res.write(`${JSON.stringify(row)}\n`);
+        res.write(`${JSON.stringify(handleRow(row))}\n`);
       },
       (err, n) => {
         res.end();
       },
     );
   } else {
-    db.all(`select * from temps order by date desc`, (err, rows) => {
+    db.all(q, (err, rows) => {
+      console.log(rows[0]);
       if (err != null) {
         next(err);
         return;
       }
-      res.json(rows);
+      res.json(rows.map(handleRow));
     });
   }
 });
@@ -96,12 +105,6 @@ const PORT = 3000;
 const server = http.createServer(app);
 
 const wss = new WebSocket.Server({ server, path: '/api/sockets' });
-
-wss.on('connection', ws => {
-  ws.on('message', () => {
-
-  });
-});
 
 server.listen(PORT, () => {
   console.log(`listening on ${PORT}`);

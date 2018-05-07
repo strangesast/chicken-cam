@@ -10,6 +10,7 @@
     <video id="video"></video>
   </div>
   <svg height="300"></svg>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/6.1.0/rxjs.umd.min.js"></script>
   <script src="https://d3js.org/d3.v5.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
@@ -34,20 +35,94 @@
       });
     }
 
-    const socket = new WebSocket(`ws://${ location.host }/api/sockets`);
+    const { Observable } = rxjs;
+    const { bufferTime, concat, scan } = rxjs.operators;
 
-    const pre = document.querySelector('pre');
-    socket.onopen = () => console.log('socket opened');
-    socket.onerror = e => console.log(`socket error: ${e.error}`);
-    socket.onmessage = e => {
-      pre.textContent = JSON.stringify(JSON.parse(e.data), null, 2);
-      console.log(`${e.data}`);
-    }
-    socket.onclose = () => console.log('socket closed');
+    const updates$ = Observable.create(observer => {
+      const socket = new WebSocket(`ws://${ location.host }/api/sockets`);
 
+      const pre = document.querySelector('pre');
+      socket.onopen = () => console.log('socket opened');
+      socket.onerror = e => observer.error(e.error);
+      socket.onmessage = e => {
+        const update = JSON.parse(e.data);
+        pre.textContent = JSON.stringify(update, null, 2);
+        observer.next(update);
+      }
+      socket.onclose = () => observer.complete();
+    });
+
+    const svg = d3.select("svg");
+    const margin = {top: 20, right: 20, bottom: 30, left: 50};
+    let width = 500;
+    svg.attr('width', width);
+    const height = +svg.attr("height") - margin.top - margin.bottom;
+    const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    const x = d3.scaleTime().rangeRound([0, width]);//.domain(d3.extent(data, d => d.date));
+    const y = d3.scaleLinear().rangeRound([height, 0]).domain([6000, 9000]);//.domain(d3.extent(data, d => d.temp));
+    const line = d3.line().x(d => x(d.date)).y(d => y(d.temp));
+
+    const xAxisCall = d3.axisBottom().scale(x);
+    const axisBottom = g.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(xAxisCall)
+
+    axisBottom
+      .select('.domain')
+      .remove();
+
+    g.append('g').call(d3.axisLeft(y)).append('text')
+      .attr('transform', 'rotate(-90)')
+      .attr('y', 6)
+      .attr('dy', '0.71em')
+      .attr('text-anchor', 'end')
+      .text('Temperature (F)');
+
+    const res$ = Observable.create(async(observer) => {
+      const response = await fetch('/api', {headers: {'Accept': 'application/stream+json'}});
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done, value, last = '';
+      while (true) {
+        ({ done, value } = await reader.read());
+        if (done) {
+          break;
+        }
+        last += decoder.decode(value);
+        const arr = last.split('\n');
+        last = arr.splice(arr.length - 1, 1)[0];
+        for (const val of arr) {
+          observer.next(JSON.parse(val));
+        }
+      }
+      observer.complete();
+    });
+
+    res$.pipe(
+      bufferTime(50),
+      concat(updates$),
+      scan((a, b) => a.concat(b), []),
+    ).subscribe(arr => {
+      const sel = g.selectAll('path').data(['inside', 'outside'])
+
+      x.domain(d3.extent(arr, d => d.date));
+      //axisBottom.call(xAxisCall.scale(x));
+
+      sel.enter()
+        .append('path')
+        .attr('fill', 'none')
+        .attr('stroke', 'black')
+        .attr('stroke-width', 1.5)
+      .merge(sel)
+        .attr('d', d => line(arr.map(v => ({ date: new Date(v.date), temp: v[d] }))));
+    });
+
+    /*
     (async function() {
       const res = await fetch('/api', {headers:{'Accept': 'application/json'}});
       let data = await res.json();
+       console.log(data.length);
 
       const hours = {};
       for (const { date, ...d } of data) {
@@ -88,25 +163,7 @@
       //graphOnce(byHour.map(({ outside, date }) => ({ temp: outside, date })), 3600000);
       graphOnce(byMinute.map(({ outside, date }) => ({ temp: outside, date })), 60000);
     })();
-
-    const svg = d3.select("svg");
-    const margin = {top: 20, right: 20, bottom: 30, left: 50};
-    let width = 500;
-    svg.attr('width', width);
-    const height = +svg.attr("height") - margin.top - margin.bottom;
-    const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-
-    const x = d3.scaleTime().rangeRound([0, width]);//.domain(d3.extent(data, d => d.date));
-    const y = d3.scaleLinear().rangeRound([height, 0]).domain([6000, 9000]);//.domain(d3.extent(data, d => d.temp));
-    const line = d3.line().x(d => x(d.date)).y(d => y(d.temp));
-
-    g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x)).select('.domain').remove();
-    g.append('g').call(d3.axisLeft(y)).append('text')
-      .attr('transform', 'rotate(-90)')
-      .attr('y', 6)
-      .attr('dy', '0.71em')
-      .attr('text-anchor', 'end')
-      .text('Temperature (F)');
+    */
 
 
     function graphOnce(data, interval) {
