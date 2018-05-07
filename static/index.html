@@ -50,55 +50,70 @@
       let data = await res.json();
 
       const hours = {};
-      for (const d of data) {
-        const hour = Math.round(d.date / 3600000) * 3600000;
+      for (const { date, ...d } of data) {
+        const hour = Math.round(date / 3600000) * 3600000;
         if (hours[hour] == null) {
-          hours[hour] = d.inside;
+          hours[hour] = d;
         }
       }
 
       const byHour = Object.entries(hours)
-        .map(([date, inside]) => ({ inside, date: new Date(parseInt(date, 10)) }))
+        .map(([date, d]) => ({ ...d, date: new Date(parseInt(date, 10)) }))
         .sort(sortBy('date'));
 
       const minutes = data
-        .reduce((minutes, d) => {
-          const minute = Math.round(d.date / 60000) * 60000;
-          (minutes[minute] || (minutes[minute] = [])).push(d.inside);
+        .reduce((minutes, {date, ...d}) => {
+          const minute = Math.round(date / 60000) * 60000;
+          (minutes[minute] || (minutes[minute] = [])).push(d);
           return minutes;
         }, {});
 
       const byMinute = Object.entries(minutes)
         .map(([date, vals]) => ({
           date: new Date(parseInt(date)),
-          inside: vals.reduce((a, b) => a + b, 0) / vals.length,
+          ...Object.entries(vals.reduce((a, b) => {
+            for (const key of Object.keys(b)) {
+              if (!a[key]) {
+                a[key] = 0;
+              }
+              a[key]+=b[key];
+            }
+            return a;
+          }, {})).reduce((a, [key, value]) => ({ ...a, [key]: value / vals.length }), {}),
         }))
         .sort(sortBy('date'));
+      console.log(byMinute);
 
-      graphOnce(byHour, 3600000);
-      //graphOnce(byMinute, 60000);
+      //graphOnce(byHour.map(({ inside, date }) => ({ temp: inside, date })), 3600000);
+      graphOnce(byMinute.map(({ inside, date }) => ({ temp: inside, date })), 60000);
+      //graphOnce(byHour.map(({ outside, date }) => ({ temp: outside, date })), 3600000);
+      graphOnce(byMinute.map(({ outside, date }) => ({ temp: outside, date })), 60000);
     })();
 
+    const svg = d3.select("svg");
+    const margin = {top: 20, right: 20, bottom: 30, left: 50};
+    let width = 500;
+    svg.attr('width', width);
+    const height = +svg.attr("height") - margin.top - margin.bottom;
+    const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    const x = d3.scaleTime().rangeRound([0, width]);//.domain(d3.extent(data, d => d.date));
+    const y = d3.scaleLinear().rangeRound([height, 0]).domain([6000, 9000]);//.domain(d3.extent(data, d => d.temp));
+    const line = d3.line().x(d => x(d.date)).y(d => y(d.temp));
+
+    g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x)).select('.domain').remove();
+    g.append('g').call(d3.axisLeft(y)).append('text')
+      .attr('transform', 'rotate(-90)')
+      .attr('y', 6)
+      .attr('dy', '0.71em')
+      .attr('text-anchor', 'end')
+      .text('Temperature (F)');
+
+
     function graphOnce(data, interval) {
-      const svg = d3.select("svg");
-      const margin = {top: 20, right: 20, bottom: 30, left: 50};
-      const width = Math.max(500, data.length * 1 / 2) - margin.left - margin.right;
-      svg.attr('width', width);
-      const height = +svg.attr("height") - margin.top - margin.bottom;
-      const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-
-      const x = d3.scaleTime().rangeRound([0, width]).domain(d3.extent(data, d => d.date));
-      const y = d3.scaleLinear().rangeRound([height, 0]).domain(d3.extent(data, d => d.inside));
-      const line = d3.line().x(d => x(d.date)).y(d => y(d.inside));
-
-      g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x)).select('.domain').remove();
-      g.append('g').call(d3.axisLeft(y)).append('text')
-        .attr('transform', 'rotate(-90)')
-        .attr('y', 6)
-        .attr('dy', '0.71em')
-        .attr('text-anchor', 'end')
-        .text('Temperature (F)');
-
+      svg.attr('width', width = Math.max(500, data.length * 1 / 2) - margin.left - margin.right);
+      console.log('data', data);
+      x.domain(d3.extent(data, d => d.date));
       const parts = data
         .reduce((parts, d) => {
           if (parts.length === 0) {
