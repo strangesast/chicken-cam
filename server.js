@@ -65,7 +65,6 @@ port.on('open', function() {
     last += data.toString()
     let arr = last.split('\r\n');
     // dump first response
-    console.log(first, arr);
     if (first) {
       if (arr.length > 1) {
         arr = arr.slice(1);
@@ -77,7 +76,6 @@ port.on('open', function() {
     let add;
     ([add, last] = [arr.slice(0, -1), arr.slice(-1)[0]])
     const date = Date.now();
-    console.log('add', add);
     for (const temps of add) {
       const [inside, outside] = temps.split(',').map(v => Math.floor(parseFloat(v)*100));
       lastValue = { inside, outside, date };
