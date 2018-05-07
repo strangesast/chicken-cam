@@ -82,7 +82,6 @@
           }, {})).reduce((a, [key, value]) => ({ ...a, [key]: value / vals.length }), {}),
         }))
         .sort(sortBy('date'));
-      console.log(byMinute);
 
       //graphOnce(byHour.map(({ inside, date }) => ({ temp: inside, date })), 3600000);
       graphOnce(byMinute.map(({ inside, date }) => ({ temp: inside, date })), 60000);
@@ -112,7 +111,6 @@
 
     function graphOnce(data, interval) {
       svg.attr('width', width = Math.max(500, data.length * 1 / 2) - margin.left - margin.right);
-      console.log('data', data);
       x.domain(d3.extent(data, d => d.date));
       const parts = data
         .reduce((parts, d) => {
