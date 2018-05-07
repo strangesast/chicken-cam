@@ -5,6 +5,7 @@
     <title>Chicken Cam</title>
 </head>
 <body>
+  <pre></pre>
   <div>
     <video id="video"></video>
   </div>
@@ -35,9 +36,13 @@
 
     const socket = new WebSocket(`ws://${ location.host }/api/sockets`);
 
+    const pre = document.querySelector('pre');
     socket.onopen = () => console.log('socket opened');
     socket.onerror = e => console.log(`socket error: ${e.error}`);
-    socket.onmessage = e => console.log(`socket message: ${e.data}`);
+    socket.onmessage = e => {
+      pre.textContent = JSON.stringify(JSON.parse(e.data), null, 2);
+      console.log(`${e.data}`);
+    }
     socket.onclose = () => console.log('socket closed');
 
     (async function() {
@@ -48,25 +53,25 @@
       for (const d of data) {
         const hour = Math.round(d.date / 3600000) * 3600000;
         if (hours[hour] == null) {
-          hours[hour] = d.temp;
+          hours[hour] = d.inside;
         }
       }
 
       const byHour = Object.entries(hours)
-        .map(([date, temp]) => ({ temp, date: new Date(parseInt(date, 10)) }))
+        .map(([date, inside]) => ({ inside, date: new Date(parseInt(date, 10)) }))
         .sort(sortBy('date'));
 
       const minutes = data
         .reduce((minutes, d) => {
           const minute = Math.round(d.date / 60000) * 60000;
-          (minutes[minute] || (minutes[minute] = [])).push(d.temp);
+          (minutes[minute] || (minutes[minute] = [])).push(d.inside);
           return minutes;
         }, {});
 
       const byMinute = Object.entries(minutes)
         .map(([date, vals]) => ({
           date: new Date(parseInt(date)),
-          temp: vals.reduce((a, b) => a + b, 0) / vals.length,
+          inside: vals.reduce((a, b) => a + b, 0) / vals.length,
         }))
         .sort(sortBy('date'));
 
@@ -83,8 +88,8 @@
       const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
       const x = d3.scaleTime().rangeRound([0, width]).domain(d3.extent(data, d => d.date));
-      const y = d3.scaleLinear().rangeRound([height, 0]).domain(d3.extent(data, d => d.temp));
-      const line = d3.line().x(d => x(d.date)).y(d => y(d.temp));
+      const y = d3.scaleLinear().rangeRound([height, 0]).domain(d3.extent(data, d => d.inside));
+      const line = d3.line().x(d => x(d.date)).y(d => y(d.inside));
 
       g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x)).select('.domain').remove();
       g.append('g').call(d3.axisLeft(y)).append('text')

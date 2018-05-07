@@ -54,7 +54,7 @@ app.get('/api', (req, res, next) => {
 });
 
 app.get('/api/status', (_, res) => {
-  res.json({ open: port.isOpen });
+  res.json(lastValue);
 });
 
 let first = true;
