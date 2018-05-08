@@ -20,7 +20,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 //const q = `select * from temps order by date asc`;
-const q = `select avg(inside), avg(outside), date from temps group by cast(date / 60000 as int) order by date asc`;
+const q = `select avg(inside), avg(outside), date from temps group by cast(date / 300000 as int) order by date asc`;
 
 function handleRow(row) {
   //return row;
@@ -52,7 +52,6 @@ app.get('/api', (req, res, next) => {
     );
   } else {
     db.all(q, (err, rows) => {
-      console.log(rows[0]);
       if (err != null) {
         next(err);
         return;

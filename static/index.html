@@ -36,7 +36,7 @@
     }
 
     const { Observable } = rxjs;
-    const { bufferTime, concat, scan } = rxjs.operators;
+    const { bufferTime, concat, filter, map, scan } = rxjs.operators;
 
     const updates$ = Observable.create(observer => {
       const socket = new WebSocket(`ws://${ location.host }/api/sockets`);
@@ -47,15 +47,15 @@
       socket.onmessage = e => {
         const update = JSON.parse(e.data);
         pre.textContent = JSON.stringify(update, null, 2);
-        observer.next(update);
+        observer.next({...update, date: new Date(update.date)});
       }
       socket.onclose = () => observer.complete();
     });
 
     const svg = d3.select("svg");
     const margin = {top: 20, right: 20, bottom: 30, left: 50};
-    let width = 500;
-    svg.attr('width', width);
+    let width = 1000;
+    svg.attr('width', width + margin.right + margin.left);
     const height = +svg.attr("height") - margin.top - margin.bottom;
     const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
@@ -100,11 +100,14 @@
     });
 
     res$.pipe(
+      map(d => ({...d, date: new Date(d.date)})),
       bufferTime(50),
+      filter(a => a.length > 0),
       concat(updates$),
       scan((a, b) => a.concat(b), []),
     ).subscribe(arr => {
       const sel = g.selectAll('path').data(['inside', 'outside'])
+      console.log(arr);
 
       x.domain(d3.extent(arr, d => d.date));
       //axisBottom.call(xAxisCall.scale(x));
@@ -115,7 +118,7 @@
         .attr('stroke', 'black')
         .attr('stroke-width', 1.5)
       .merge(sel)
-        .attr('d', d => line(arr.map(v => ({ date: new Date(v.date), temp: v[d] }))));
+        .attr('d', d => line(arr.map(v => ({ date: v.date, temp: v[d] }))));
     });
 
     /*
