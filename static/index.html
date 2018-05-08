@@ -107,7 +107,6 @@
       scan((a, b) => a.concat(b), []),
     ).subscribe(arr => {
       const sel = g.selectAll('path').data(['inside', 'outside'])
-      console.log(arr);
 
       x.domain(d3.extent(arr, d => d.date));
       //axisBottom.call(xAxisCall.scale(x));
