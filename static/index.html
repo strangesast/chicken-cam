@@ -60,7 +60,7 @@
     const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
     const x = d3.scaleTime().rangeRound([0, width]);//.domain(d3.extent(data, d => d.date));
-    const y = d3.scaleLinear().rangeRound([height, 0]).domain([6000, 9000]);//.domain(d3.extent(data, d => d.temp));
+    const y = d3.scaleLinear().rangeRound([height, 0]).domain([5000, 10000]);//.domain(d3.extent(data, d => d.temp));
     const line = d3.line().x(d => x(d.date)).y(d => y(d.temp));
 
     const xAxisCall = d3.axisBottom().scale(x);
