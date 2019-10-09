@@ -30,9 +30,15 @@ async def empty_queue(queue: asyncio.Queue):
                 except asyncio.TimeoutError:
                     print('timeout')
                     break
+            con.commit()
 
 
-    
+async def fill_queue(queue: asyncio.Queue):
+    while True:
+        val: str = yield
+        record = (time.time(), val, *val.split('->'))
+        await queue.put(record)
+
 
 async def main():
     print('creating table...')
@@ -44,9 +50,11 @@ async def main():
 
     task = asyncio.create_task(empty_queue(queue))
 
-    async for val in gen():
-        await queue.put((time.time(), val, *val.split('->')))
+    filler = fill_queue(queue)
+    await filler.asend(None)
 
+    async for val in gen():
+        await filler.asend(val)
 
     task.cancel()
 
