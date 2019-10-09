@@ -1,0 +1,55 @@
+import time
+import asyncio
+import sqlite3
+import contextlib
+
+async def gen():
+    for i in range(0, 2):
+        yield '0->2'
+        await asyncio.sleep(0.5)
+        yield '2->1'
+        await asyncio.sleep(2.0)
+        yield '1->4'
+        await asyncio.sleep(0.5)
+        yield '4->0'
+        await asyncio.sleep(2.0)
+
+
+async def empty_queue(queue: asyncio.Queue):
+    while True:
+        # create connection that lasts until timeout
+        record = await queue.get()
+        with contextlib.closing(sqlite3.connect('test.db')) as con:
+            print('got first record', record)
+            con.execute('INSERT INTO events(date, raw, statefrom, stateto) VALUES(?,?,?,?)', record)
+            while True:
+                try:
+                    record = await asyncio.wait_for(queue.get(), timeout=0.8)
+                    print('got another record', record)
+                    con.execute('INSERT INTO events(date, raw, statefrom, stateto) VALUES(?,?,?,?)', record)
+                except asyncio.TimeoutError:
+                    print('timeout')
+                    break
+
+
+    
+
+async def main():
+    print('creating table...')
+    with contextlib.closing(sqlite3.connect('test.db')) as con:
+        con.execute('''CREATE TABLE IF NOT EXISTS events
+                (date INTEGER, raw TEXT, statefrom INTEGER, stateto INTEGER)''')
+
+    queue = asyncio.Queue()
+
+    task = asyncio.create_task(empty_queue(queue))
+
+    async for val in gen():
+        await queue.put((time.time(), val, *val.split('->')))
+
+
+    task.cancel()
+
+
+if __name__ == '__main__':
+    asyncio.run(main())

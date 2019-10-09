@@ -1,0 +1,6 @@
+astral==1.10.1
+freezegun==0.3.12
+python-dateutil==2.8.0
+pytz==2019.2
+schedule==0.6.0
+six==1.12.0
