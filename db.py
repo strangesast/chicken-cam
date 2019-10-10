@@ -19,14 +19,13 @@ async def empty_queue(queue: asyncio.Queue):
     while True:
         # create connection that lasts until timeout
         record = await queue.get()
+        print('got first record', record)
         with contextlib.closing(sqlite3.connect('test.db')) as con:
-            print('got first record', record)
-            con.execute('INSERT INTO events(date, raw, statefrom, stateto) VALUES(?,?,?,?)', record)
             while True:
+                con.execute('INSERT INTO events(date, raw, statefrom, stateto) VALUES(?,?,?,?)', record)
                 try:
                     record = await asyncio.wait_for(queue.get(), timeout=0.8)
                     print('got another record', record)
-                    con.execute('INSERT INTO events(date, raw, statefrom, stateto) VALUES(?,?,?,?)', record)
                 except asyncio.TimeoutError:
                     print('timeout')
                     break
@@ -35,8 +34,9 @@ async def empty_queue(queue: asyncio.Queue):
 
 async def fill_queue(queue: asyncio.Queue):
     while True:
-        val: str = yield
-        record = (time.time(), val, *val.split('->'))
+        raw: str = yield
+        vals = raw.split('->') if '->' in raw else 2*[None]
+        record = (time.time(), raw, vals)
         await queue.put(record)
 
 
