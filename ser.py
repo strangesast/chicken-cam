@@ -12,25 +12,27 @@ with serial.Serial('/dev/ttyACM0', 9600, timeout=60) as ser, contextlib.closing(
     con.commit()
     while True:
         records = []
+        print('waiting')
         while True:
             line = ser.readline()
             if not line:
                 break
             line = line.decode('utf8')
             val = line.split('->') if '->' in line else 2*[None]
-            now = int(time.time())
-            records.append((now, line, *val))
+            records.append((int(time.time()), line, *val))
 
         if len(records) > 0:
             con.executemany('INSERT INTO events VALUES (?,?,?,?)', records)
             con.commit()
         
+        print('checking')
         cur = con.cursor()
-        cur.execute('SELECT id, value FROM requests WHERE date < ? AND textstate = ?', (now, 'scheduled'))
+        cur.execute('SELECT id, value FROM requests WHERE date < ? AND textstate = ?', (int(time.time()), 'scheduled'))
         command = cur.fetchone()
         if command:
             _id, val = command
+            print('writing request {} ({})'.format(_id, 'OPEN' if val == 1 else 'CLOSE'))
             ser.write(OPEN if val == 1 else CLOSE)
             ser.flush()
-            con.execute('UPDATE requests SET textstate = ?, completed = ? WHERE id = ?', ('completed', now, _id))
+            con.execute('UPDATE requests SET textstate = ?, completed = ? WHERE id = ?', ('completed', int(time.time()), _id))
             con.commit()
