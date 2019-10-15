@@ -1,30 +1,18 @@
+import os
+from os.path import dirname, realpath, normpath, join
 import json
 import asyncio
 import aiosqlite
 from aiohttp import web
+from pathlib import Path
+from configparser import ConfigParser
+
+from common.db import init_db
 
 
-'''
-async def handleStream(request):
-    db = request.app['db']
-    response = web.StreamResponse(
-        status=200,
-        reason='OK',
-        headers={'Content-Type': 'text/plain'},
-    )
-    await response.prepare(request)
+routes = web.RouteTableDef()
 
-    async with db.execute('SELECT * FROM requests') as cursor:
-        async for row in cursor:
-            await response.write(json.dumps(row).encode('utf8'))
-
-    await response.write_eof()
-    return response
-
-    #name = request.match_info.get('name', "Anonymous")
-    #text = "Hello, " + name
-    #return web.Response(text=text)
-'''
+@routes.get('/requests')
 async def handle(request):
     requests = []
     db = request.app['db']
@@ -36,26 +24,31 @@ async def handle(request):
     return web.json_response({'requests': requests})
 
 
-async def setup(loop):
-    app = web.Application(loop=loop)
-    db = await aiosqlite.connect('../test.db')
+@routes.get('/events')
+async def handle(request):
+    events = []
+    db = request.app['db']
+    async with db.execute('SELECT * FROM requests') as cursor:
+        keys = [d[0] for d in cursor.description]
+        async for row in cursor:
+            events.append({key: value for key, value in zip(keys, row)})
+
+    return web.json_response({'events': events})
+
+
+
+async def setup():
+    config = ConfigParser()
+    config.read('config.ini')
+    defaultConfig = config[config.default_section]
+    app = web.Application()
+    root = dirname(realpath(__file__))
+    databaseFile = normpath(join(root, '../', defaultConfig['databasefile']))
+    db = await aiosqlite.connect(databaseFile)
+    await init_db(db)
     app['db'] = db
-    app.add_routes([
-        web.get('/requests', handle),
-        #web.get('/{name}', handle)
-        ])
-    app.router.add_static('/', './')
-    runner = web.AppRunner(app)
-    await runner.setup()
+    app.add_routes(routes)
+    app.router.add_static('/', dirname(realpath(__file__)))
+    return app
 
-    site = web.TCPSite(runner, port=3000)    
-    return await site.start()
-
-if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(setup(loop))
-
-    try:
-        loop.run_forever()
-    finally:
-        loop.close()
+web.run_app(setup(), port=3000)

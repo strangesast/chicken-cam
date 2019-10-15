@@ -1,0 +1,14 @@
+@import '~@angular/material/theming';
+@include mat-core();
+$chicken-cam-primary: mat-palette($mat-grey);
+$chicken-cam-accent: mat-palette($mat-blue, A200, A100, A400);
+$chicken-cam-warn: mat-palette($mat-red);
+$chicken-cam-theme: mat-light-theme($chicken-cam-primary, $chicken-cam-accent, $chicken-cam-warn);
+@include angular-material-theme($chicken-cam-theme);
+html, body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}

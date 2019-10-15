@@ -1,0 +1,7 @@
+version: '3.7'
+services:
+  chickens:
+    build:
+      network: host
+      context: .
+      dockerfile: Dockerfile
