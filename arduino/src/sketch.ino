@@ -6,6 +6,8 @@
 #define BOTTOM_PIN 6
 #define TOP_PIN 7
 
+int state = 0; // closed, open, opening_long, opening_short, closing
+
 void setup() {
   Serial.begin(9600);
   pinMode(CONTROL_PIN, OUTPUT);
@@ -17,24 +19,36 @@ void setup() {
   pinMode(TOP_PIN, INPUT);
   pinMode(SIDE_PIN, INPUT);
 
+  // try to init in the right state
+  if (reachedTop() || reachedSide()) {
+    state = 1;
+  }
+
   Serial.println("ready");
   Serial.flush();
 }
 
-int state = 0; // closed, open, opening_long, opening_short, closing
 long lastTransitionStart;
-long lastUp;
+long lastUpdate;
+// long lastUp;
 int buttonState[3];
 
 void loop() {
   // if open or closed (not transitioning) and incoming command
-  if ((state == 0 || state == 1) && (Serial.available() > 0 || digitalRead(TOGGLE_PIN))) {
+  long now = millis();
+  bool serialAvailable = Serial.available() > 0;
+  bool buttonPressed = digitalRead(TOGGLE_PIN) == HIGH;
+  if ((state == 0 || state == 1) && (serialAvailable || buttonPressed)) {
     int cmd;
-    resetTimeout();
+    resetTimeout(now);
 
-    // serial or button?
-    if (Serial.available() > 0) {
+    // serial or button press?
+    if (serialAvailable) {
       cmd = Serial.read();
+      // dump remaining buffer
+      while (Serial.available() > 0) {
+        Serial.read();
+      }
     } else {
       if (state == 0) {
         cmd = '1';
@@ -58,25 +72,37 @@ void loop() {
     // duration has passed or limit reached
     //if (reachedTimeout() || reachedTop()) {
     // sliders get janky at the furthest extent so just stop when reaching the side
-    if (reachedTimeout() || reachedTop() || reachedSide()) {
+    if (reachedTimeout(now) || reachedTop() || reachedSide()) {
       changeState(1); // open
-      lastUp = millis();
+      // lastUp = now;
       doStop();
     } else if (state == 2 && reachedSide()) { // reached side so slow down
       changeState(3); // opening_short
       doUp(false); // open slow
     }
   }
-//  if (state == 1 && millis() - lastUp > 5000) { // open and duration has passed
+//  if (state == 1 && now - lastUp > 5000) { // open and duration has passed
 //    state = 4; // closing
-//    lastTransitionStart = millis();
+//    lastTransitionStart = now;
 //    doDown();
 //  }
   if (state == 4) { // closing
-    if (reachedBottom() || reachedTimeout()) { // reached limit or duration
+    if (reachedBottom() || reachedTimeout(now)) { // reached limit or duration
       changeState(0);
       doStop();
     }
+  }
+  // report state of sensors every minute
+  if (now - lastUpdate > 60000) {
+    // currentstate, topsensor, sidesensor, bottomsensor
+    Serial.print(state);
+    Serial.print("|");
+    Serial.print(digitalRead(TOP_PIN));
+    Serial.print("|");
+    Serial.print(digitalRead(SIDE_PIN));
+    Serial.print("|");
+    Serial.println(digitalRead(BOTTOM_PIN));
+    lastUpdate = now;
   }
 }
 
@@ -92,12 +118,12 @@ bool reachedTop() {
   return !digitalRead(TOP_PIN);
 }
 
-bool reachedTimeout() {
-  return millis() - lastTransitionStart > 5000;
+bool reachedTimeout(long now) {
+  return now - lastTransitionStart > 5000;
 }
 
-void resetTimeout() {
-  lastTransitionStart = millis();
+void resetTimeout(long now) {
+  lastTransitionStart = now;
 }
 
 void changeState(int _state) {

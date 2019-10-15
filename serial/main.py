@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import serial
 import sqlite3
@@ -11,6 +12,8 @@ OPEN = b'1'
 
 if __name__ == '__main__':
     #logging.basicConfig(filename='coopdoor-serial.log',level=logging.DEBUG)
+    #logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+
     log = logging.getLogger()
     log.addHandler(JournalHandler())
     log.setLevel(logging.DEBUG)
@@ -23,26 +26,39 @@ if __name__ == '__main__':
     log.info('Using db file {}'.format(DB_FILE))
     with serial.Serial(PORT, 9600, timeout=TIMEOUT) as ser, contextlib.closing(sqlite3.connect(DB_FILE)) as con:
         log.debug('Creating necessary tables')
-        con.execute('CREATE TABLE IF NOT EXISTS events (date INTEGER, raw TEXT, fromstate INTEGER, tostate INTEGER)')
+        con.execute('CREATE TABLE IF NOT EXISTS events_changes (date INTEGER, raw TEXT, fromstate INTEGER, tostate INTEGER)')
+        con.execute('CREATE TABLE IF NOT EXISTS events_states (date INTEGER, raw TEXT, currentstate INTEGER, topsensor INTEGER, sidesensor INTEGER, bottomsensor INTEGER)')
+        con.execute('CREATE TABLE IF NOT EXISTS events_unknown (date INTEGER, raw TEXT)')
         con.execute('CREATE TABLE IF NOT EXISTS requests (id INTEGER PRIMARY KEY AUTOINCREMENT, value INTEGER, date INTEGER UNIQUE, textstate TEXT, completed INTEGER, created INTEGER)')
 
         con.commit()
+        lastCheck = 0;
         while True:
             records = []
+            hasupdate = False
             log.debug('Waiting {}s for serial data'.format(TIMEOUT))
-            while True:
-                line = ser.readline()
-                if not line:
+            while (time.time() - lastCheck) < TIMEOUT:
+                raw = ser.readline().decode('utf8').strip()
+                if not raw:
                     break
-                line = line.decode('utf8')
-                val = line.split('->') if '->' in line else 2*[None]
-                records.append((int(time.time()), line, *val))
+                hasupdate = True
+                date = int(time.time())
+                if '->' in raw:
+                    # fromstate, tostate
+                    values = [int(v) if v.isdigit() else None for v in raw.split('->')]
+                    con.execute('INSERT INTO events_changes (date,raw,fromstate,tostate) VALUES (?,?,?,?)', (date, raw, *values))
+                elif '|' in raw:
+                    # currentstate, topsensor, sidesensor, bottomsensor
+                    values = [int(v) if v.isdigit() else None for v in raw.split('|')]
+                    con.execute('INSERT INTO events_states (date,raw,currentstate,topsensor,sidesensor,bottomsensor) VALUES (?,?,?,?,?,?)', (date, raw, *values))
+                else:
+                    con.execute('INSERT INTO events_unknown (date,raw) VALUES (?,?)', (date, raw))
     
-            if len(records) > 0:
-                con.executemany('INSERT INTO events VALUES (?,?,?,?)', records)
+            if hasupdate:
                 con.commit()
             
             log.debug('Checking for requests')
+            lastCheck = time.time()
             cur = con.cursor()
             cur.execute('SELECT id, value FROM requests WHERE date < ? AND textstate = ?', (int(time.time()), 'scheduled'))
             command = cur.fetchone()
