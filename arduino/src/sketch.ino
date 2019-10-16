@@ -88,7 +88,10 @@ void loop() {
 //  }
   if (state == 4) { // closing
     if (reachedBottom() || reachedTimeout(now)) { // reached limit or duration
-      changeState(0);
+      changeState(0); // closed
+      doStop();
+    } else if (reachedTop() || reachedSide()) { // retracted then reopened.  dont break the belt
+      changeState(1); // open
       doStop();
     }
   }
