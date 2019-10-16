@@ -28,7 +28,7 @@ if __name__ == '__main__':
     log.info('Using db file {}'.format(DB_FILE))
     with Serial(PORT, 9600, timeout=TIMEOUT) as ser, contextlib.closing(sqlite3.connect(DB_FILE)) as con:
         log.debug('Creating necessary tables')
-        init_db_sync(db)
+        init_db(con)
         lastCheck = 0;
         while True:
             records = []
