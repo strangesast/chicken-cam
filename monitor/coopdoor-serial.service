@@ -2,9 +2,9 @@
 Description=CoopDoor Serial Service
 
 [Service]
-WorkingDirectory=/home/pi/
+WorkingDirectory=/home/pi/Projects/coop/
 User=pi
-ExecStart=/usr/bin/python3 /home/pi/Projects/coop/serial/main.py
+ExecStart=/usr/bin/python3 -m monitor.main
 Restart=on-failure
 
 [Install]

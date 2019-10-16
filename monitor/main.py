@@ -1,11 +1,13 @@
 import os
 import sys
 import time
-import serial
+from serial import Serial
 import sqlite3
 import logging
 import contextlib
 from systemd.journal import JournalHandler
+
+from common.db_sync import init_db
 
 CLOSE = b'0'
 OPEN = b'1'
@@ -24,14 +26,9 @@ if __name__ == '__main__':
 
     log.info('Using serial port {}'.format(PORT))
     log.info('Using db file {}'.format(DB_FILE))
-    with serial.Serial(PORT, 9600, timeout=TIMEOUT) as ser, contextlib.closing(sqlite3.connect(DB_FILE)) as con:
+    with Serial(PORT, 9600, timeout=TIMEOUT) as ser, contextlib.closing(sqlite3.connect(DB_FILE)) as con:
         log.debug('Creating necessary tables')
-        con.execute('CREATE TABLE IF NOT EXISTS events_changes (date INTEGER, raw TEXT, fromstate INTEGER, tostate INTEGER)')
-        con.execute('CREATE TABLE IF NOT EXISTS events_states (date INTEGER, raw TEXT, currentstate INTEGER, topsensor INTEGER, sidesensor INTEGER, bottomsensor INTEGER)')
-        con.execute('CREATE TABLE IF NOT EXISTS events_unknown (date INTEGER, raw TEXT)')
-        con.execute('CREATE TABLE IF NOT EXISTS requests (id INTEGER PRIMARY KEY AUTOINCREMENT, value INTEGER, date INTEGER UNIQUE, textstate TEXT, completed INTEGER, created INTEGER)')
-
-        con.commit()
+        init_db_sync(db)
         lastCheck = 0;
         while True:
             records = []
