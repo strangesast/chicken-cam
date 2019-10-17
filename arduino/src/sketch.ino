@@ -90,7 +90,7 @@ void loop() {
     if (reachedBottom() || reachedTimeout(now)) { // reached limit or duration
       changeState(0); // closed
       doStop();
-    } else if (reachedTop() || reachedSide()) { // retracted then reopened.  dont break the belt
+    } else if ((now - lastTransitionStart > 1000) && (reachedTop() || reachedSide())) { // retracted then reopened.  dont break the belt
       changeState(1); // open
       doStop();
     }
