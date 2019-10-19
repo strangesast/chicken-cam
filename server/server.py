@@ -1,25 +1,11 @@
 import os
-import sys
 import asyncio
 import logging
 import aiosqlite
-from systemd.journal import JournalHandler
-
-from common import init_db
-
-import os
-from os.path import dirname, realpath, normpath, join
-import json
-import asyncio
-import aiosqlite
 from aiohttp import web
 from datetime import datetime, timedelta
-from pathlib import Path
+from systemd.journal import JournalHandler
 
-from common import init_db
-
-
-routes = web.RouteTableDef()
 
 QUERY_DEFAULTS = {
     'offset': 0,
@@ -27,9 +13,17 @@ QUERY_DEFAULTS = {
     'range': 14
 }
 
+SCHEMAS = [
+  'CREATE TABLE IF NOT EXISTS events_changes (date INTEGER, raw TEXT, fromstate INTEGER, tostate INTEGER)',
+  'CREATE TABLE IF NOT EXISTS events_states (date INTEGER, raw TEXT, currentstate INTEGER, topsensor INTEGER, sidesensor INTEGER, bottomsensor INTEGER)',
+  'CREATE TABLE IF NOT EXISTS events_unknown (date INTEGER, raw TEXT)',
+  'CREATE TABLE IF NOT EXISTS requests (id INTEGER PRIMARY KEY AUTOINCREMENT, value INTEGER, date INTEGER UNIQUE, textstate TEXT, completed INTEGER, created INTEGER, createdgroup INTEGER)'
+]
+
+routes = web.RouteTableDef()
 
 # get changes history
-@routes.get('/state')
+@routes.get('/states')
 async def get_states(request: web.Request):
     db: aiosqlite.Connection = request.app['db']
     offset, limit, _range = [int(v) if (v := request.rel_url.query.get(s, '')).isdigit()
@@ -61,7 +55,7 @@ async def get_changes(request: web.Request):
 
 
 @routes.get('/requests')
-async def get_requests(request):
+async def get_requests(request: web.Request):
     requests = []
     db = request.app['db']
     keys = ['date','completed','created','id','value','textstate']
@@ -71,6 +65,36 @@ async def get_requests(request):
             requests.append(dict(zip(keys,values)))
 
     return web.json_response({'requests': requests})
+
+
+@routes.post('/requests')
+async def post_requests(request: web.Request):
+    data = await request.post()
+    date, value = data['when'], data['value']
+    try:
+        date = datetime.fromisoformat(date)
+    except:
+        return web.HTTPUnprocessableEntity(body='invalid when date')
+    if value != '0' and value != '1':
+        return web.HTTPUnprocessableEntity(body='invalid value')
+
+    now = int(datetime.now().timestamp())
+    record = [value, date, 'scheduled', now]
+    r = await con.execute('insert into requests (value, date, textstate, created) values (?,?,?,?)', record)
+    print(r)
+
+    return web.json_response({'record': record})
+
+
+@routes.get('/')
+async def index(request):
+    return web.FileResponse('./index.html')
+
+
+async def init_db(db):
+    for sql in SCHEMAS:
+        await db.execute(sql)
+    await db.commit()
 
 
 def split_nums(s, delim):
