@@ -1,26 +1,31 @@
 import os
 import sys
-import time
-from serial import Serial
-import sqlite3
+import asyncio
 import logging
-import contextlib
+import aiosqlite
+from datetime import datetime
+import contextvars
 from systemd.journal import JournalHandler
 
-from common.db_sync import init_db
+from common import init_db
 
 CLOSE = b'0'
 OPEN = b'1'
 
-def reader_handler(reader):
+db_var = contextvars.ContextVar('db')
+queue_var = contextvars.ContextVar('queue')
+
+async def reader_handler(reader):
+    db = db_var.get()
     while True:
         new = False
         while True:
             try:
-                raw = await asyncio.wait_for(reader.readline(), timeout=5)
+                b = await asyncio.wait_for(reader.readline(), timeout=5)
             except asyncio.TimeoutError:
                 break
             date = datetime.now()
+            raw = b.decode('utf8', errors='ignore').strip()
             if '->' in raw:
                 # fromstate, tostate
                 values = [int(v) if v.isdigit() else None for v in raw.split('->')]
@@ -42,7 +47,10 @@ def reader_handler(reader):
             await db.commit()
         # insert line
 
-def writer_handler(writer):
+
+async def writer_handler(writer):
+    queue = queue_var.get()
+    db = db_var.get()
     while True:
         _id, value = await queue.get()
         b = value.encode('utf8')
@@ -55,15 +63,24 @@ def writer_handler(writer):
         WHERE id = ?''', (textstate, date, _id))
 
 
-if __name__ == '__main__':
+async def main():
     log = logging.getLogger()
     log.addHandler(JournalHandler())
     log.setLevel(logging.DEBUG)
 
     db = await aiosqlite.connect(os.environ.get('DB_FILE', 'test.db'))
     await init_db(db)
+    db_var.set(db)
 
     reader, writer = await asyncio.open_connection('127.0.0.1',
             os.environ.get('MONITOR_PORT', '3333'))
 
-    await asyncio.gather(reader_handler(reader), writer_handler)
+    queue = asyncio.Queue()
+    queue_var.set(queue)
+
+    await reader.read(12) # greeting? extra bullshit
+    await asyncio.gather(reader_handler(reader), writer_handler(writer))
+
+
+if __name__ == '__main__':
+    asyncio.run(main())
