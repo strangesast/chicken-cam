@@ -1,88 +1,90 @@
 import os
-from os.path import dirname, realpath, normpath, join
-import json
+import sys
 import asyncio
+import logging
 import aiosqlite
-from aiohttp import web
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
+from systemd.journal import JournalHandler
 
 from common import init_db
 
 
-routes = web.RouteTableDef()
+async def reader_handler(reader, db: aiosqlite.Connection):
+    while True:
+        new = False
+        while True:
+            try:
+                b = await asyncio.wait_for(reader.readline(), timeout=5)
+            except asyncio.TimeoutError:
+                break
+            date = datetime.now()
+            raw = b.decode('utf8', errors='ignore').strip()
+            if '->' in raw:
+                # fromstate, tostate
+                values = [int(v) if v.isdigit() else None for v in raw.split('->')]
+                q = con.execute('''INSERT INTO events_changes
+                (date,raw,fromstate,tostate) VALUES (?,?,?,?)''', (date, raw, *values))
+            elif '|' in raw:
+                # currentstate, topsensor, sidesensor, bottomsensor
+                values = [int(v) if v.isdigit() else None for v in raw.split('|')]
+                q = db.execute('''INSERT INTO events_states
+                (date,raw,currentstate,topsensor,sidesensor,bottomsensor)
+                VALUES (?,?,?,?,?,?)''', (date, raw, *values))
+            else:
+                q = db.execute('''INSERT INTO events_unknown
+                (date,raw) VALUES (?,?)''', (date, raw))
+            new = True
+            await q
+
+        if new:
+            await db.commit()
 
 
-# list of requests
-#   default some number, some range
-
-# create request
-#   extract value, when
-#   default now
-
-# get state history
-
-
-DEFAULTS = {
-    'offset': 0,
-    'limit': 100,
-    'range': 14
-}
+async def writer_handler(writer, db: aiosqlite.Connection, queue: asyncio.Queue):
+    while True:
+        _id, value = await queue.get()
+        b = value.encode('utf8')
+        try:
+            await writer.write(b)
+            textstate = 'completed'
+        except:
+            textstate = 'failed'
+        await db.execute('''UPDATE requests SET textstate = ?, completed = ?
+        WHERE id = ?''', (textstate, date, _id))
 
 
-# get changes history
-@routes.get('/state')
-async def get_states(request: web.Request):
-    db: aiosqlite.Connection = request.app['db']
-    offset, limit, _range = [int(v) if (v := request.rel_url.query.get(s, '')).isdigit()
-            else DEFAULTS[s] for s in ['offset', 'limit', 'range']]
-    # by default today - this week - last week
-    gt = int((datetime.now() - timedelta(days=14)).timestamp())
-    keys = ['date','topsensor','sidesensor','bottomsensor']
-    async with db.execute('SELECT {} FROM events_states'.format(','.join(keys))) as cursor:
-        records = []
-        last = None
-        async for d,*v in cursor:
-            if last != v:
-                last = v
-                d = datetime.fromtimestamp(d).isoformat()
-                records.append(dict(zip(keys,[d]+v)))
-    return web.json_response({'records': records})
+async def poller(db: aiosqlite.Connection, queue: asyncio.Queue, timeout=60):
+    while True:
+        date = datetime.now()
+        async with db.execute('SELECT id, value FROM requests WHERE date < ? AND textstate = ?',
+                (int(datetime.timestamp()), 'scheduled')) as cursor:
+            command = await cursor.fetchone()
+
+        if command:
+            await queue.put(command)
+
+        await asyncio.sleep(timeout)
 
 
-@routes.get('/changes')
-async def get_changes(request: web.Request):
-    db: aiosqlite.Connection  = request.app['db']
-    records = []
-    keys = ['date','fromstate','tostate']
-    async with db.execute('SELECT {},{},{} FROM events_changes'.format(*keys)) as cursor:
-        async for d,*v in cursor:
-            d = datetime.fromtimestamp(d).isoformat()
-            records.append(dict(zip(keys, [d]+v)))
-    return web.json_response({'records': records})
+async def main():
+    log = logging.getLogger()
+    log.addHandler(JournalHandler())
+    log.setLevel(logging.DEBUG)
 
-
-@routes.get('/requests')
-async def get_requests(request):
-    requests = []
-    db = request.app['db']
-    keys = ['date','completed','created','id','value','textstate']
-    async with db.execute('SELECT {} FROM requests'.format(','.join(keys))) as cursor:
-        async for row in cursor:
-            values = [datetime.fromtimestamp(d).isoformat() if d else None for d in row[0:3]] + list(row[3:])
-            requests.append(dict(zip(keys,values)))
-
-    return web.json_response({'requests': requests})
-
-
-async def setup():
-    app = web.Application()
     db = await aiosqlite.connect(os.environ.get('DB_FILE', 'test.db'))
     await init_db(db)
-    app['db'] = db
-    app.add_routes(routes)
-    app.router.add_static('/', dirname(realpath(__file__)))
-    return app
+
+    reader, writer = await asyncio.open_connection('127.0.0.1',
+            os.environ.get('MONITOR_PORT', '3333'))
+
+    queue = asyncio.Queue()
+
+    await reader.read(12) # greeting? extra bullshit
+    await asyncio.gather(
+        reader_handler(reader, db),
+        writer_handler(writer, db, queue),
+        poller(db, queue))
+
 
 if __name__ == '__main__':
-    web.run_app(setup(), port=3000)
+    asyncio.run(main())
