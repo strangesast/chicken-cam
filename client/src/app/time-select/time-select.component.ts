@@ -7,16 +7,17 @@ import { map, switchMap, takeUntil } from 'rxjs/operators';
   selector: 'app-time-select',
   template: `
   <form [formGroup]="form">
-    <mat-radio-group aria-label="Select an time" formControlName="value">
-      <mat-radio-button *ngFor="let time of defaultTimes" [value]="time">{{time}}</mat-radio-button>
-      <mat-radio-button [value]="'now'">Now</mat-radio-button>
-      <mat-radio-button [value]="'custom'">Custom</mat-radio-button>
+    <mat-radio-group class="group" aria-label="Select an time" formControlName="value">
+      <mat-radio-button class="group_child" *ngFor="let time of defaultTimes" [value]="time">{{time}}</mat-radio-button>
+      <mat-radio-button class="group_child" [value]="'now'">Now</mat-radio-button>
+      <mat-radio-button class="group_child" [value]="'custom'">Custom</mat-radio-button>
     </mat-radio-group>
-    <ng-container *ngIf="customEnabled">
+    <div class="custom-input" *ngIf="customEnabled">
+      <label>Custom Time:</label>
       <mat-form-field>
         <input matInput formControlName="customValue" type="time"/>
       </mat-form-field>
-    </ng-container>
+    </div>
   </form>
   `,
   providers: [
@@ -77,8 +78,12 @@ export class TimeSelectComponent implements OnInit, ControlValueAccessor {
     };
   }
 
-  writeValue(obj: any) {
-
+  writeValue(value: string) {
+    if (this.defaultTimes.includes(value)) {
+      this.form.patchValue({value}, {emitEvent: false});
+    } else {
+      this.form.patchValue({value: 'custom', customValue: value}, {emitEvent: false});
+    }
   }
 
   registerOnChange(fn) {

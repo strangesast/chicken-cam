@@ -1,0 +1,16 @@
+:host {
+  display: block;
+}
+
+:host > form {
+  display: grid;
+  grid-template-columns: min-content auto;
+  grid-row-gap: 8px;
+  grid-column-gap: 12px;
+  padding: 12px;
+  max-width: 400px;
+}
+
+.group > .group_child:not(:first-child) {
+  margin-left: 12px;
+}

@@ -1,0 +1,23 @@
+:host {
+  display: inline-block;
+}
+
+:host > form {
+  display: inline-block;
+}
+
+:host > form > * {
+  display: flex;
+}
+
+.group > .group_child:not(:first-child) {
+  margin-left: 12px;
+}
+
+.custom-input {
+  display: flex;
+  align-items: center;
+  & > *:not(:first-child) {
+    margin-left: 12px;
+  }
+}
