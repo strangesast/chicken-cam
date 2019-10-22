@@ -26,7 +26,7 @@ LOG_VAR = ContextVar('log')
 routes = web.RouteTableDef()
 
 # get changes history
-@routes.get('/states')
+@routes.get('/api/states')
 async def get_states(request: web.Request):
     db: aiosqlite.Connection = request.app['db']
     offset, limit, _range = [int(v) if (v := request.rel_url.query.get(s, '')).isdigit()
@@ -45,7 +45,7 @@ async def get_states(request: web.Request):
     return web.json_response({'records': records})
 
 
-@routes.get('/changes')
+@routes.get('/api/changes')
 async def get_changes(request: web.Request):
     db: aiosqlite.Connection  = request.app['db']
     records = []
@@ -57,20 +57,20 @@ async def get_changes(request: web.Request):
     return web.json_response({'records': records})
 
 
-@routes.get('/requests')
+@routes.get('/api/requests')
 async def get_requests(request: web.Request):
-    requests = []
+    records = []
     db = request.app['db']
     keys = ['date','completed','created','id','value','textstate']
     async with db.execute('SELECT {} FROM requests'.format(','.join(keys))) as cursor:
         async for row in cursor:
             values = [datetime.fromtimestamp(d).isoformat() if d else None for d in row[0:3]] + list(row[3:])
-            requests.append(dict(zip(keys,values)))
+            records.append(dict(zip(keys,values)))
 
-    return web.json_response({'requests': requests})
+    return web.json_response({'records': records})
 
 
-@routes.post('/requests')
+@routes.post('/api/requests')
 async def post_requests(request: web.Request):
     data = await request.post()
     date, value = data['when'], data['value']
@@ -92,7 +92,7 @@ async def post_requests(request: web.Request):
 
 @routes.get('/')
 async def index(request):
-    return web.FileResponse('./index.html')
+    return web.FileResponse('../client/dist/chicken-cam/index.html')
 
 
 async def init_db(db):
@@ -207,7 +207,7 @@ async def main():
     app = web.Application()
     app['db'] = db
     app.add_routes(routes)
-    #app.router.add_static('/', os.path.dirname(os.path.realpath(__file__)))
+    app.router.add_static('/', '../client/dist/chicken-cam/')
     
     runner = web.AppRunner(app)
     await runner.setup()

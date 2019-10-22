@@ -10,8 +10,14 @@
   display: flex;
 }
 
-.group > .group_child:not(:first-child) {
-  margin-left: 12px;
+.group {
+  flex-wrap: wrap;
+}
+.group > .group_child {
+  padding: 8px 4px;
+  &:not(:last-child) {
+    margin-right: 12px;
+  }
 }
 
 .custom-input {

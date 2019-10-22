@@ -5,6 +5,10 @@ import { HttpClient } from '@angular/common/http';
   providedIn: 'root'
 })
 export class RequestsService {
+  getRequests() {
+    return this.http.get('/api/requests');
+  }
+
   createRequest() {
     const body = {};
     return this.http.post('/api/requests', body);

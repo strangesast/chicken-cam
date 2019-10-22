@@ -11,12 +11,14 @@ import { MaterialModule } from './material/material.module';
 
 import { NewRequestFormComponent } from './new-request-form/new-request-form.component';
 import { TimeSelectComponent } from './time-select/time-select.component';
+import { OpenCloseComponent } from './open-close/open-close.component';
 
 @NgModule({
   declarations: [
     AppComponent,
     NewRequestFormComponent,
-    TimeSelectComponent
+    TimeSelectComponent,
+    OpenCloseComponent
   ],
   imports: [
     BrowserModule,

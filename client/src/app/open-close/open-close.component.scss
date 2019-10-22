@@ -1,0 +1,12 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+
+  & > * {
+    height: 80px;
+  }
+  & > *:not(:first-child) {
+    margin-top: 12px;
+  }
+}

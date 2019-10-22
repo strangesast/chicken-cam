@@ -22,13 +22,12 @@ function formatTime(d) {
         <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
         <mat-datepicker #picker></mat-datepicker>
       </mat-form-field>
-      <button mat-stroked-button class="group_child" [disabled]="isToday()" (click)="setDateToday()">Today</button>
+      <button mat-stroked-button [disabled]="isToday()" (click)="setDateToday()">Today</button>
     </div>
     <label>Time</label>
     <app-time-select formControlName="time"></app-time-select>
     <button mat-flat-button color="primary" [disabled]="!form.touched || form.invalid" type="submit">Create</button>
   </form>
-  <pre>{{form.value | json}}</pre>
   `,
   styleUrls: ['./new-request-form.component.scss']
 })

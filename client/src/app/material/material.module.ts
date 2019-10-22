@@ -5,6 +5,8 @@ import { MatRadioModule } from '@angular/material/radio';
 import { MatNativeDateModule } from '@angular/material';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatButtonModule } from '@angular/material/button';
+import { MatTabsModule } from '@angular/material/tabs';
+import { MatTableModule } from '@angular/material/table';
 
 
 const components = [
@@ -13,6 +15,8 @@ const components = [
   MatNativeDateModule,
   MatDatepickerModule,
   MatButtonModule,
+  MatTabsModule,
+  MatTableModule,
 ];
 
 
