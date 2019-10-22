@@ -61,7 +61,7 @@ async def get_changes(request: web.Request):
 async def get_requests(request: web.Request):
     requests = []
     db = request.app['db']
-    keys = ['date','completed','created','id','value','textstate']
+    keys = ['date','completed','created','id','value','textstate','reason']
     async with db.execute('SELECT {} FROM requests'.format(','.join(keys))) as cursor:
         async for row in cursor:
             values = [datetime.fromtimestamp(d).isoformat() if d else None for d in row[0:3]] + list(row[3:])
@@ -151,6 +151,7 @@ async def writer_handler(writer, db: aiosqlite.Connection, queue: asyncio.Queue)
         except Exception as e:
             textstate = 'failed'
             reason = str(e)
+            log.error(e)
         log.debug(f'command {value=} {textstate=} {reason=}')
         date = int(datetime.now().timestamp())
         await db.execute('''UPDATE requests SET textstate = ?, completed = ?, reason = ?
@@ -161,10 +162,11 @@ async def poller(db: aiosqlite.Connection, queue: asyncio.Queue, timeout=60):
     log = LOG_VAR.get()
     log.debug(f'poller running with {timeout=}')
     while True:
-        date = datetime.now() - timedelta(minutes=10)
+        datea = datetime.now() - timedelta(minutes=10)
+        dateb = datetime.now()
         log.debug(f'checking for commands')
-        async with db.execute('SELECT id, value FROM requests WHERE date < ? AND textstate = ?',
-                (int(date.timestamp()), 'scheduled')) as cursor:
+        async with db.execute('SELECT id, value FROM requests WHERE date > ? && date < ? AND textstate = ?',
+                (int(datea.timestamp()), int(date.timestamp()), 'scheduled')) as cursor:
             command = await cursor.fetchone()
 
         if command:
