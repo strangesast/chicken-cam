@@ -1,11 +1,11 @@
 import os
+import sys
 import asyncio
 import logging
 import aiosqlite
 from aiohttp import web
 from contextvars import ContextVar
 from datetime import datetime, timedelta
-from systemd.journal import JournalHandler
 
 
 QUERY_DEFAULTS = {
@@ -108,7 +108,6 @@ def split_nums(s, delim):
 async def reader_handler(reader, db: aiosqlite.Connection):
     log = LOG_VAR.get()
     while True:
-        new = False
         while True:
             log.debug('waiting for serial line')
             try:
@@ -180,7 +179,13 @@ async def poller(db: aiosqlite.Connection, queue: asyncio.Queue, timeout=60):
 
 async def main():
     log = logging.getLogger()
-    log.addHandler(JournalHandler())
+    try:
+        from systemd.journal import JournalHandler
+        log.addHandler(JournalHandler())
+    except ImportError:
+        from logging import StreamHandler
+        log.addHandler(StreamHandler(sys.stdout))
+
     log.setLevel(logging.DEBUG)
     LOG_VAR.set(log)
 
@@ -206,20 +211,24 @@ async def main():
     
     runner = web.AppRunner(app)
     await runner.setup()
-    API_HOST = '0.0.0.0'
-    API_PORT = 3000
+    API_HOST, API_PORT = '0.0.0.0', 3000
     log.info('hosting api at {}:{}'.format(API_HOST, API_PORT))
     site = web.TCPSite(runner, API_HOST, API_PORT)
     await site.start()
 
-    await reader.read(12) # extra bullshit from ser2net
     try:
+        #log.info('waiting on bs header info')
+        #b = await reader.read(12) # extra bullshit from ser2net
+        #log.info(f'got it {b=}')
+
         await asyncio.gather(
             reader_handler(reader, db),
             writer_handler(writer, db, queue),
             poller(db, queue))
 
     finally:
+        writer.close()
+        await writer.wait_closed()
         await runner.cleanup()
         await db.close()
 
