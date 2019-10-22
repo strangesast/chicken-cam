@@ -157,29 +157,36 @@ async def poller(db: aiosqlite.Connection, queue: asyncio.Queue, timeout=60):
 
 
 async def main():
-    #log = logging.getLogger()
-    #log.addHandler(JournalHandler())
-    #log.setLevel(logging.DEBUG)
-
+    log = logging.getLogger()
+    log.addHandler(JournalHandler())
+    log.setLevel(logging.DEBUG)
 
     db_file = os.environ.get('DB_FILE', 'test.db')
-    print(f'{db_file=}')
+
+    log.info('using db file {}'.format(db_file))
     db = await aiosqlite.connect(db_file)
     await init_db(db)
 
-    reader, writer = await asyncio.open_connection('127.0.0.1',
-            os.environ.get('MONITOR_PORT', '3333'))
+    MONITOR_SOCKET_HOST = '127.0.0.1'
+    MONITOR_SOCKET_PORT = os.environ.get('MONITOR_PORT', '3333')
+    log.info('connecting to serial-socket {}:{}'.format(MONITOR_SOCKET_HOST,
+        MONITOR_SOCKET_PORT))
+    reader, writer = await asyncio.open_connection(MONITOR_SOCKET_HOST,
+            MONITOR_SOCKET_PORT)
 
     queue = asyncio.Queue()
 
     app = web.Application()
     app['db'] = db
     app.add_routes(routes)
-    app.router.add_static('/', dirname(realpath(__file__)))
+    #app.router.add_static('/', os.path.dirname(os.path.realpath(__file__)))
     
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 3000)
+    API_HOST = '0.0.0.0'
+    API_PORT = 3000
+    log.info('hosting api at {}:{}'.format(API_HOST, API_PORT))
+    site = web.TCPSite(runner, API_HOST, API_PORT)
     await site.start()
 
     await reader.read(12) # extra bullshit from ser2net
