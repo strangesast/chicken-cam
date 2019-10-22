@@ -4,7 +4,7 @@ Description=CoopDoor Service
 [Service]
 WorkingDirectory=/home/pi/Projects/coop/server/
 User=pi
-ExecStart=/usr/bin/python3.8 /home/pi/Projects/coop/server/main.py
+ExecStart=/usr/local/bin/python3.8 /home/pi/Projects/coop/server/main.py
 Restart=on-failure
 
 [Install]

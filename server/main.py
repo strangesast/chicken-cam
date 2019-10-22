@@ -3,6 +3,7 @@ import asyncio
 import logging
 import aiosqlite
 from aiohttp import web
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 from systemd.journal import JournalHandler
 
@@ -17,8 +18,10 @@ SCHEMAS = [
   'CREATE TABLE IF NOT EXISTS events_changes (date INTEGER, raw TEXT, fromstate INTEGER, tostate INTEGER)',
   'CREATE TABLE IF NOT EXISTS events_states (date INTEGER, raw TEXT, currentstate INTEGER, topsensor INTEGER, sidesensor INTEGER, bottomsensor INTEGER)',
   'CREATE TABLE IF NOT EXISTS events_unknown (date INTEGER, raw TEXT)',
-  'CREATE TABLE IF NOT EXISTS requests (id INTEGER PRIMARY KEY AUTOINCREMENT, value INTEGER, date INTEGER UNIQUE, textstate TEXT, completed INTEGER, created INTEGER, createdgroup INTEGER)'
+  'CREATE TABLE IF NOT EXISTS requests (id INTEGER PRIMARY KEY AUTOINCREMENT, value INTEGER, date INTEGER UNIQUE, textstate TEXT, completed INTEGER, created INTEGER, createdgroup INTEGER, reason TEXT)'
 ]
+
+LOG_VAR = ContextVar('log')
 
 routes = web.RouteTableDef()
 
@@ -73,6 +76,7 @@ async def post_requests(request: web.Request):
     date, value = data['when'], data['value']
     try:
         date = datetime.fromisoformat(date)
+        date = int(datetime.timestamp())
     except:
         return web.HTTPUnprocessableEntity(body='invalid when date')
     if value != '0' and value != '1':
@@ -80,8 +84,8 @@ async def post_requests(request: web.Request):
 
     now = int(datetime.now().timestamp())
     record = [value, date, 'scheduled', now]
-    r = await con.execute('insert into requests (value, date, textstate, created) values (?,?,?,?)', record)
-    print(r)
+    value = int(value)
+    r = await request.app['db'].execute('insert into requests (value, date, textstate, created) values (?,?,?,?)', record)
 
     return web.json_response({'record': record})
 
@@ -102,56 +106,74 @@ def split_nums(s, delim):
 
 
 async def reader_handler(reader, db: aiosqlite.Connection):
+    log = LOG_VAR.get()
     while True:
         new = False
         while True:
+            log.debug('waiting for serial line')
             try:
                 b = await asyncio.wait_for(reader.readline(), timeout=5)
             except asyncio.TimeoutError:
+                log.debug('serial timeout')
                 break
             date = int(datetime.now().timestamp())
             raw = b.decode('utf8', errors='ignore').strip()
+            log.debug(f'got line: {raw}')
             if '->' in raw and len(values := split_nums(raw, '->')) == 2:
+                log.debug(f'is change.  values: {values}')
                 # fromstate, tostate
-                q = con.execute('''INSERT INTO events_changes
+                await db.execute('''INSERT INTO events_changes
                         (date,raw,fromstate,tostate) VALUES (?,?,?,?)''', (date, raw, *values))
+                await db.commit()
             if '|' in raw and len(values := split_nums(raw, '|')) == 4:
+                log.debug(f'is state.  values: {values}')
                 # currentstate, topsensor, sidesensor, bottomsensor
-                q = db.execute('''INSERT INTO events_states
+                await db.execute('''INSERT INTO events_states
                         (date,raw,currentstate,topsensor,sidesensor,bottomsensor)
                         VALUES (?,?,?,?,?,?)''', (date, raw, *values))
+                await db.commit()
             else:
-                q = db.execute('''INSERT INTO events_unknown
+                log.debug(f'is unknown')
+                await db.execute('''INSERT INTO events_unknown
                         (date,raw) VALUES (?,?)''', (date, raw))
-            new = True
-            await q
-
-        if new:
-            await db.commit()
+                await db.commit()
 
 
 async def writer_handler(writer, db: aiosqlite.Connection, queue: asyncio.Queue):
+    log = LOG_VAR.get()
     while True:
-        _id, value = await queue.get()
-        b = value.encode('utf8')
+        reason = None
         try:
+            log.debug('got command')
+            _id, value = await queue.get()
+            b = str(value).encode('utf8')
             await writer.write(b)
             textstate = 'completed'
-        except:
+        except Exception as e:
             textstate = 'failed'
-        await db.execute('''UPDATE requests SET textstate = ?, completed = ?
-                WHERE id = ?''', (textstate, date, _id))
+            reason = str(e)
+        log.debug(f'command {value=} {textstate=} {reason=}')
+        date = int(datetime.now().timestamp())
+        await db.execute('''UPDATE requests SET textstate = ?, completed = ?, reason = ?
+                WHERE id = ?''', (textstate, date, reason, _id))
 
 
 async def poller(db: aiosqlite.Connection, queue: asyncio.Queue, timeout=60):
+    log = LOG_VAR.get()
+    log.debug(f'poller running with {timeout=}')
     while True:
-        date = datetime.now()
+        date = datetime.now() - timedelta(minutes=10)
+        log.debug(f'checking for commands')
         async with db.execute('SELECT id, value FROM requests WHERE date < ? AND textstate = ?',
                 (int(date.timestamp()), 'scheduled')) as cursor:
             command = await cursor.fetchone()
 
         if command:
+            log.debug(f'got {command=}')
             await queue.put(command)
+        else:
+            log.debug(f'no commands')
+
 
         await asyncio.sleep(timeout)
 
@@ -160,6 +182,7 @@ async def main():
     log = logging.getLogger()
     log.addHandler(JournalHandler())
     log.setLevel(logging.DEBUG)
+    LOG_VAR.set(log)
 
     db_file = os.environ.get('DB_FILE', 'test.db')
 
