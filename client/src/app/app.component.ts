@@ -16,16 +16,18 @@ function formatTime(date: Date) {
   selector: 'app-root',
   template: `
   <div class="container mat-elevation-z2">
-    <h1>Chicken Cam</h1>
-    <p *ngIf="description$ | async as description">Open as of {{description.date}}, {{description.time}}</p>
-    <mat-tab-group>
+    <header>
+      <h1>Chicken Cam</h1>
+      <p *ngIf="description$ | async as description">Open as of {{description.date}}, {{description.time}}</p>
+    </header>
+    <mat-tab-group mat-align-tabs="center">
       <mat-tab label="Command">
         <app-open-close></app-open-close>
       </mat-tab>
       <mat-tab label="Schedule">
-        <h2>Schedule New</h2>
+        <h2 class="header">Schedule New</h2>
         <app-new-request-form (created)="onNewRequest($event)"></app-new-request-form>
-        <h2>Upcoming</h2>
+        <h2 class="header">Upcoming</h2>
         <div *ngIf="history$ | async as history">
           <table class="table" *ngIf="history$ | async as history" mat-table [dataSource]="history">
             <ng-container matColumnDef="date">
@@ -51,7 +53,22 @@ function formatTime(date: Date) {
           </table>
         </div>
       </mat-tab>
-      <mat-tab label="History"></mat-tab>
+      <mat-tab label="History">
+        <div *ngIf="history$ | async as history">
+          <table class="table" *ngIf="history$ | async as history" mat-table [dataSource]="history">
+            <ng-container matColumnDef="date">
+              <th mat-header-cell *matHeaderCellDef>Date</th>
+              <td mat-cell *matCellDef="let element">{{element.date}}</td>
+            </ng-container>
+            <ng-container matColumnDef="value">
+              <th mat-header-cell *matHeaderCellDef>Action</th>
+              <td mat-cell *matCellDef="let element">{{element.value == '1' ? 'OPEN' : 'CLOSE'}}</td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
+        </div>
+      </mat-tab>
     </mat-tab-group>
   </div>
   `,

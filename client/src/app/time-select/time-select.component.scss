@@ -22,8 +22,9 @@
 
 .custom-input {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  & > *:not(:first-child) {
-    margin-left: 12px;
+  & > *:not(:last-child) {
+    margin-right: 12px;
   }
 }

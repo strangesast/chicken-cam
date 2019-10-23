@@ -165,8 +165,8 @@ async def poller(db: aiosqlite.Connection, queue: asyncio.Queue, timeout=60):
         datea = datetime.now() - timedelta(minutes=10)
         dateb = datetime.now()
         log.debug(f'checking for commands')
-        async with db.execute('SELECT id, value FROM requests WHERE date > ? && date < ? AND textstate = ?',
-                (int(datea.timestamp()), int(date.timestamp()), 'scheduled')) as cursor:
+        async with db.execute('SELECT id, value FROM requests WHERE date > ? AND date < ? AND textstate = ?',
+                (int(datea.timestamp()), int(dateb.timestamp()), 'scheduled')) as cursor:
             command = await cursor.fetchone()
 
         if command:
