@@ -18,7 +18,8 @@ SCHEMAS = [
   'CREATE TABLE IF NOT EXISTS events_changes (date INTEGER, raw TEXT, fromstate INTEGER, tostate INTEGER)',
   'CREATE TABLE IF NOT EXISTS events_states (date INTEGER, raw TEXT, currentstate INTEGER, topsensor INTEGER, sidesensor INTEGER, bottomsensor INTEGER)',
   'CREATE TABLE IF NOT EXISTS events_unknown (date INTEGER, raw TEXT)',
-  'CREATE TABLE IF NOT EXISTS requests (id INTEGER PRIMARY KEY AUTOINCREMENT, value INTEGER, date INTEGER UNIQUE, textstate TEXT, completed INTEGER, created INTEGER, createdgroup INTEGER, reason TEXT)'
+  'CREATE TABLE IF NOT EXISTS requests (id INTEGER PRIMARY KEY AUTOINCREMENT, value INTEGER, scheduleddate INTEGER UNIQUE, textstate TEXT, completeddate INTEGER, createddate INTEGER, transactionid INTEGER, reason TEXT)',
+  'CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, date INTEGER)'
 ]
 
 LOG_VAR = ContextVar('log')
@@ -61,7 +62,7 @@ async def get_changes(request: web.Request):
 async def get_requests(request: web.Request):
     records = []
     db = request.app['db']
-    keys = ['date','completed','created','id','value','textstate','reason']
+    keys = ['scheduleddate','completeddate','createddate','id','value','textstate','reason','transactionid']
     async with db.execute('SELECT {} FROM requests'.format(','.join(keys))) as cursor:
         async for row in cursor:
             values = [datetime.fromtimestamp(d).isoformat() if d else None for d in row[0:3]] + list(row[3:])
@@ -85,7 +86,7 @@ async def post_requests(request: web.Request):
     now = int(datetime.now().timestamp())
     record = [value, date, 'scheduled', now]
     value = int(value)
-    r = await request.app['db'].execute('insert into requests (value, date, textstate, created) values (?,?,?,?)', record)
+    r = await request.app['db'].execute('insert into requests (value, scheduleddate, textstate, createddate) values (?,?,?,?)', record)
 
     return web.json_response({'record': record})
 
@@ -154,7 +155,7 @@ async def writer_handler(writer, db: aiosqlite.Connection, queue: asyncio.Queue)
             log.error(e)
         log.debug(f'command {value=} {textstate=} {reason=}')
         date = int(datetime.now().timestamp())
-        await db.execute('''UPDATE requests SET textstate = ?, completed = ?, reason = ?
+        await db.execute('''UPDATE requests SET textstate = ?, completeddate = ?, reason = ?
                 WHERE id = ?''', (textstate, date, reason, _id))
 
 
@@ -165,7 +166,7 @@ async def poller(db: aiosqlite.Connection, queue: asyncio.Queue, timeout=60):
         datea = datetime.now() - timedelta(minutes=10)
         dateb = datetime.now()
         log.debug(f'checking for commands')
-        async with db.execute('SELECT id, value FROM requests WHERE date > ? AND date < ? AND textstate = ?',
+        async with db.execute('SELECT id, value FROM requests WHERE scheduleddate > ? AND scheduleddate < ? AND textstate = ?',
                 (int(datea.timestamp()), int(dateb.timestamp()), 'scheduled')) as cursor:
             command = await cursor.fetchone()
 
@@ -219,9 +220,9 @@ async def main():
     await site.start()
 
     try:
-        #log.info('waiting on bs header info')
-        #b = await reader.read(12) # extra bullshit from ser2net
-        #log.info(f'got it {b=}')
+        log.info('waiting on bs header info')
+        b = await reader.read(12) # extra bullshit from ser2net
+        log.info(f'got it {b=}')
 
         await asyncio.gather(
             reader_handler(reader, db),
