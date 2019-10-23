@@ -1,7 +1,8 @@
-# Chick Coop Door
+# Coop Door
 A project to control a chicken coop door based on a regular schedule (sunrise / sunset) or as required.
 <img src="https://raw.githubusercontent.com/strangesast/chicken-cam/master/media/coop_door_in.png" height="300"/>
-<img src="https://giant.gfycat.com/LonelyBreakableGoldenmantledgroundsquirrel.gif" height="300"/>
+<img src="https://giant.gfycat.com/LonelyBreakableGoldenmantledgroundsquirrel.gif" height="300"/>  
+[Google Photos Album](https://photos.app.goo.gl/njCLHvBsod69ejjU7)
 
 # Project Structure
 ## `arduino/`
