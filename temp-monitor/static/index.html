@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chicken Cam</title>
+</head>
+<body>
+  <pre></pre>
+  <div>
+    <video id="video"></video>
+  </div>
+  <svg height="300"></svg>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/6.1.0/rxjs.umd.min.js"></script>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    //const src = `http://${ location.host }/hls/stream.m3u8`;
+    const src = `/hls/stream.m3u8`;
+    if(Hls.isSupported()) {
+        var video = document.getElementById('video');
+        var hls = new Hls();
+	hls.loadSource(src);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED,function() {
+          video.play();
+      });
+    }
+    // hls.js is not supported on platforms that do not have Media Source Extensions (MSE) enabled.
+    // When the browser has built-in HLS support (check using `canPlayType`), we can provide an HLS manifest (i.e. .m3u8 URL) directly to the video element throught the `src` property.
+    // This is using the built-in support of the plain video element, without using hls.js.
+    else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = src;
+      video.addEventListener('canplay',function() {
+        video.play();
+      });
+    }
+
+    const { Observable } = rxjs;
+    const { bufferTime, concat, filter, map, scan } = rxjs.operators;
+
+    const updates$ = Observable.create(observer => {
+      const socket = new WebSocket(`ws://${ location.host }/api/sockets`);
+
+      const pre = document.querySelector('pre');
+      socket.onopen = () => console.log('socket opened');
+      socket.onerror = e => observer.error(e.error);
+      socket.onmessage = e => {
+        const update = JSON.parse(e.data);
+        pre.textContent = JSON.stringify(update, null, 2);
+        observer.next({...update, date: new Date(update.date)});
+      }
+      socket.onclose = () => observer.complete();
+    });
+
+    const svg = d3.select("svg");
+    const margin = {top: 20, right: 20, bottom: 30, left: 50};
+    let width = 1000;
+    svg.attr('width', width + margin.right + margin.left);
+    const height = +svg.attr("height") - margin.top - margin.bottom;
+    const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    const x = d3.scaleTime().rangeRound([0, width]);//.domain(d3.extent(data, d => d.date));
+    const y = d3.scaleLinear().rangeRound([height, 0]).domain([5000, 10000]);//.domain(d3.extent(data, d => d.temp));
+    const line = d3.line().x(d => x(d.date)).y(d => y(d.temp));
+
+    const xAxisCall = d3.axisBottom().scale(x);
+    const axisBottom = g.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(xAxisCall)
+
+    axisBottom
+      .select('.domain')
+      .remove();
+
+    g.append('g').call(d3.axisLeft(y)).append('text')
+      .attr('transform', 'rotate(-90)')
+      .attr('y', 6)
+      .attr('dy', '0.71em')
+      .attr('text-anchor', 'end')
+      .text('Temperature (F)');
+
+    const res$ = Observable.create(async(observer) => {
+      const response = await fetch('/api', {headers: {'Accept': 'application/stream+json'}});
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done, value, last = '';
+      while (true) {
+        ({ done, value } = await reader.read());
+        if (done) {
+          break;
+        }
+        last += decoder.decode(value);
+        const arr = last.split('\n');
+        last = arr.splice(arr.length - 1, 1)[0];
+        for (const val of arr) {
+          observer.next(JSON.parse(val));
+        }
+      }
+      observer.complete();
+    });
+
+    res$.pipe(
+      map(d => ({...d, date: new Date(d.date)})),
+      bufferTime(50),
+      filter(a => a.length > 0),
+      concat(updates$),
+      scan((a, b) => a.concat(b), []),
+    ).subscribe(arr => {
+      const sel = g.selectAll('path').data(['inside', 'outside'])
+
+      x.domain(d3.extent(arr, d => d.date));
+      //axisBottom.call(xAxisCall.scale(x));
+
+      sel.enter()
+        .append('path')
+        .attr('fill', 'none')
+        .attr('stroke', 'black')
+        .attr('stroke-width', 1.5)
+      .merge(sel)
+        .attr('d', d => line(arr.map(v => ({ date: v.date, temp: v[d] }))));
+    });
+
+    /*
+    (async function() {
+      const res = await fetch('/api', {headers:{'Accept': 'application/json'}});
+      let data = await res.json();
+       console.log(data.length);
+
+      const hours = {};
+      for (const { date, ...d } of data) {
+        const hour = Math.round(date / 3600000) * 3600000;
+        if (hours[hour] == null) {
+          hours[hour] = d;
+        }
+      }
+
+      const byHour = Object.entries(hours)
+        .map(([date, d]) => ({ ...d, date: new Date(parseInt(date, 10)) }))
+        .sort(sortBy('date'));
+
+      const minutes = data
+        .reduce((minutes, {date, ...d}) => {
+          const minute = Math.round(date / 60000) * 60000;
+          (minutes[minute] || (minutes[minute] = [])).push(d);
+          return minutes;
+        }, {});
+
+      const byMinute = Object.entries(minutes)
+        .map(([date, vals]) => ({
+          date: new Date(parseInt(date)),
+          ...Object.entries(vals.reduce((a, b) => {
+            for (const key of Object.keys(b)) {
+              if (!a[key]) {
+                a[key] = 0;
+              }
+              a[key]+=b[key];
+            }
+            return a;
+          }, {})).reduce((a, [key, value]) => ({ ...a, [key]: value / vals.length }), {}),
+        }))
+        .sort(sortBy('date'));
+
+      //graphOnce(byHour.map(({ inside, date }) => ({ temp: inside, date })), 3600000);
+      graphOnce(byMinute.map(({ inside, date }) => ({ temp: inside, date })), 60000);
+      //graphOnce(byHour.map(({ outside, date }) => ({ temp: outside, date })), 3600000);
+      graphOnce(byMinute.map(({ outside, date }) => ({ temp: outside, date })), 60000);
+    })();
+    */
+
+
+    function graphOnce(data, interval) {
+      svg.attr('width', width = Math.max(500, data.length * 1 / 2) - margin.left - margin.right);
+      x.domain(d3.extent(data, d => d.date));
+      const parts = data
+        .reduce((parts, d) => {
+          if (parts.length === 0) {
+            const part = [d];
+            parts.push(part);
+          } else {
+            const part = parts[parts.length - 1];
+            if (part[part.length - 1].date.getTime() + interval === d.date.getTime()) {
+              part.push(d);
+            } else {
+              parts.push([d]);
+            }
+          }
+          return parts;
+        }, [])
+        .filter(p => p.length > 1);
+
+      const boundaries = parts.reduce((arr, c, i, src) => {
+        if (i + 1 < src.length) {
+          const [a, b] = [c, src[i + 1]];
+          return [...arr, [a[a.length - 1].date, b[0].date].map(v => x(v))];
+        }
+        return arr;
+      }, []);
+
+      for (const [a, b] of boundaries) {
+        const w = b - a;
+
+        g.append('g')
+          .attr('transform', `translate(${a},0)`)
+          .append('rect')
+          .attr('fill', 'rgb(0, 0, 0, 0.1)')
+          .attr('width', w)
+          .attr('height', height);
+      }
+
+      for (const part of parts) {
+        g.append('path').datum(part)
+          .attr('fill', 'none')
+          .attr('stroke', 'black')
+          .attr('stroke-width', 1.5)
+          .attr('d', line);
+      }
+    };
+
+    function sortBy(key) {
+      return function(a, b) {
+        return a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0;
+      };
+    }
+  </script>
+</body>
+</html>
