@@ -7,3 +7,9 @@ move python file to
 
 get logs
 `journalctl --unit python_door`
+
+
+add the following line to cron with `crontab -e`
+```
+0 0 */3 * * cd /home/pi/Projects/coop/server && ./env/bin/python3 schedule.py >> cron.log 2>&1
+```
