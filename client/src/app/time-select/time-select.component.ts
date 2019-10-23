@@ -40,7 +40,7 @@ export class TimeSelectComponent implements OnInit, ControlValueAccessor {
   });
 
   @Input()
-  defaultTimes = ['08:00', '09:00', '18:00'];
+  defaultTimes = ['08:00', '09:00', '18:00', '+0:15', '+1:00'];
 
   hasError = false;
 
@@ -52,18 +52,26 @@ export class TimeSelectComponent implements OnInit, ControlValueAccessor {
   ngOnInit() {
     this.form.valueChanges.pipe(
       switchMap(({value, customValue}) => {
-        switch (value) {
-          case 'custom':
-            return of(customValue);
-          case 'now': {
-            return timer(0, 60*1000).pipe(map(() => {
-              const t = new Date();
-              const [h, m] = [t.getHours(), t.getMinutes()].map(v => ('0' + v).slice(-2));
-              return h + ':' + m;
-            }));
+        if (value == 'custom') {
+          return of(customValue);
+        }
+        if (value == 'now' || value.startsWith('+')) {
+          let [h, m] = [0, 0];
+          if (value.startsWith('+')) {
+            ([h, m] = value.slice(1,0).split(':')
+              .map(s => parseInt(s, 10))
+              .map(v => !isNaN(v) ? v : 0));
           }
-          default:
-            return of(value);
+          return timer(0, 60*1000).pipe(map(() => {
+            const date = new Date();
+            if (h !== 0 || m !== 0) {
+              date.setHours(date.getHours() + h);
+              date.setMinutes(date.getMinutes() + m);
+            }
+            return [date.getHours(), date.getMinutes()].map(v => ('0' + v).slice(-2)).join(':');
+          }));
+        } else {
+          return of(value);
         }
       }),
       takeUntil(this.destroyed$),
