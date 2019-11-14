@@ -1,7 +1,12 @@
 version: '3.7'
 services:
-  chickens:
+  client:
     build:
       network: host
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/client/Dockerfile
+  server:
+    build:
+      network: host
+      context: .
+      dockerfile: docker/server/Dockerfile
